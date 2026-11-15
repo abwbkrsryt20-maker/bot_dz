@@ -9,7 +9,10 @@ app = Flask(__name__)
 BOT_ID = "9232668538"
 BOT_KEY = "AAEwX6AWbxuDu5MxGtFpf5tXZMVbAp3NcSo"
 ADMIN_ID = 123456789
-API_URL = "https://telegram.org" + BOT_ID + ":" + BOT_KEY
+
+PROTO = "https" + "://"
+HOST = "api" + "." + "telegram" + "." + "org"
+API_URL = PROTO + HOST + "/bot" + BOT_ID + ":" + BOT_KEY
 
 users = {}
 waiting_phone = {}
@@ -50,7 +53,8 @@ def main_buttons():
 
 @app.route('/')
 def home():
-    res = tg_request("setWebhook?url=https://onrender.com")
+    my_site = PROTO + "bot-dz-qob9" + "." + "onrender" + "." + "com" + "/webhook"
+    res = tg_request("setWebhook?url=" + my_site)
     return "Bot Status: " + str(res)
 
 @app.route('/webhook', methods=['POST'])
@@ -105,7 +109,7 @@ def webhook():
                 send_msg(cid, f"⏳ لقد أخذت جائزتك هذا الأسبوع.\nعُد بعد **{days} أيام**.", main_buttons())
 
         elif cdata == "invite":
-            link = f"https://t.me{cid}"
+            link = PROTO + "t.me/noti_dz_2027_bot?start=" + str(cid)
             send_msg(cid, f"👥 **شارك رابطك واربح 10 نقاط عن كل صديق:**\n\n`{link}`", main_buttons())
 
         elif cdata == "points":
