@@ -7,7 +7,7 @@ from flask import Flask, request
 app = Flask(__name__)
 
 BOT_ID = "9232668538"
-BOT_KEY = "AAEwX6AWbxuDu5MxGtFpf5tXZMVbAp3NcSo"
+BOT_KEY = "AAFX3FgNFi6n9JB5eBd-ZUaJD8GFdU_1NWs"
 ADMIN_ID = 123456789
 
 PROTO = "https" + "://"
