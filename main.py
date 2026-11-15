@@ -1,6 +1,7 @@
 import os
+import json
 import time
-import requests
+import urllib.request
 from flask import Flask, request
 
 app = Flask(__name__)
@@ -17,11 +18,27 @@ def get_user(cid):
         users[cid] = {"points": 0, "invites": 0, "last_weekly": 0}
     return users[cid]
 
+def tg_request(method, data=None):
+    url = f"{API_URL}/{method}"
+    if data:
+        req = urllib.request.Request(
+            url,
+            data=json.dumps(data).encode('utf-8'),
+            headers={'Content-Type': 'application/json'}
+        )
+    else:
+        req = urllib.request.Request(url)
+    try:
+        with urllib.request.urlopen(req, timeout=10) as res:
+            return res.read().decode('utf-8')
+    except Exception as e:
+        return str(e)
+
 def send_msg(cid, text, buttons=None):
     payload = {"chat_id": cid, "text": text, "parse_mode": "Markdown"}
     if buttons:
         payload["reply_markup"] = {"inline_keyboard": buttons}
-    requests.post(f"{API_URL}/sendMessage", json=payload)
+    tg_request("sendMessage", payload)
 
 def main_buttons():
     return [
@@ -32,13 +49,12 @@ def main_buttons():
 
 @app.route('/')
 def home():
-    # تفعيل الويب هوك بمجرد فتح رابط السيرفر
-    r = requests.get(f"{API_URL}/setWebhook?url=https://onrender.com")
-    return f"Bot Status: {r.text}"
+    res = tg_request("setWebhook?url=https://onrender.com")
+    return f"Bot Status: {res}"
 
 @app.route('/webhook', methods=['POST'])
 def webhook():
-    data = request.get_json()
+    data = request.get_json(silent=True)
     if not data:
         return "OK", 200
 
@@ -75,7 +91,7 @@ def webhook():
         cid = call["message"]["chat"]["id"]
         cdata = call["data"]
         user = get_user(cid)
-        requests.post(f"{API_URL}/answerCallbackQuery", json={"callback_query_id": call["id"]})
+        tg_request("answerCallbackQuery", {"callback_query_id": call["id"]})
 
         if cdata == "weekly":
             now = time.time()
