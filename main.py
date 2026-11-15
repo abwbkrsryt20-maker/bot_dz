@@ -6,21 +6,60 @@ from flask import Flask, request
 
 app = Flask(__name__)
 
+# إعدادات البوت
 BOT_ID = "9232668538"
 BOT_KEY = "AAFX3FgNFi6n9JB5eBd-ZUaJD8GFdU_1NWs"
-ADMIN_ID = 123456789
 
 PROTO = "https" + "://"
 HOST = "api" + "." + "telegram" + "." + "org"
 API_URL = PROTO + HOST + "/bot" + BOT_ID + ":" + BOT_KEY
 
-users = {}
-waiting_phone = {}
+# قائمة الـ 58 ولاية جزائرية كاملة
+WILAYAS = [
+    "01 - أدرار", "02 - الشلف", "03 - الأغواط", "04 - أم البواقي", "05 - باتنة",
+    "06 - بجاية", "07 - بسكرة", "08 - بشار", "09 - البليدة", "10 - البويرة",
+    "11 - تمنراست", "12 - تبسة", "13 - تلمسان", "14 - تيارت", "15 - تيزي وزو",
+    "16 - الجزائر العاصمة", "17 - الجلفة", "18 - جيجل", "19 - سطيف", "20 - سعيدة",
+    "21 - سكيكدة", "22 - سيدي بلعباس", "23 - عنابة", "24 - قالمة", "25 - قسنطينة",
+    "26 - المدية", "27 - مستغانم", "28 - المسيلة", "29 - معسكر", "30 - ورقلة",
+    "31 - وهران", "32 - البيض", "33 - إليزي", "34 - برج بوعريريج", "35 - بومرداس",
+    "36 - الطارف", "37 - تندوف", "38 - تيسمسيلت", "39 - الوادي", "40 - خنشلة",
+    "41 - سوق أهراس", "42 - تيبازة", "43 - ميلة", "44 - عين الدفلى", "45 - النعامة",
+    "46 - عين تموشنت", "47 - غرداية", "48 - غليزان", "49 - تيميمون", "50 - برج باجي مختار",
+    "51 - أولاد جلال", "52 - بني عباس", "53 - عين صالح", "54 - عين قزام", "55 - تقرت",
+    "56 - جانت", "57 - المغير", "58 - المنيعة"
+]
 
-def get_user(cid):
-    if cid not in users:
-        users[cid] = {"points": 0, "invites": 0, "last_weekly": 0}
-    return users[cid]
+reports = {
+    "16 - الجزائر العاصمة": {
+        "البريد المركزي (الجزائر الوسطى)": {"status": "🟡 كاين دراهم + طابور متوسط", "time": "منذ قليل", "user": "النظام"},
+        "دائرة وبلدية باب الزوار": {"status": "🟢 كاين دراهم + فارغ", "time": "منذ قليل", "user": "النظام"},
+        "دائرة بئر مراد رايس": {"status": "🟢 كاين دراهم + فارغ", "time": "منذ قليل", "user": "النظام"},
+        "دائرة الرويبة": {"status": "🔴 طابور طويل جداً", "time": "منذ قليل", "user": "النظام"}
+    },
+    "31 - وهران": {
+        "بريد وهران المركزي": {"status": "🟡 كاين دراهم + طابور متوسط", "time": "منذ قليل", "user": "النظام"},
+        "دائرة السانيا": {"status": "🟢 كاين دراهم + فارغ", "time": "منذ قليل", "user": "النظام"},
+        "دائرة بئر الجير": {"status": "🟢 كاين دراهم + فارغ", "time": "منذ قليل", "user": "النظام"}
+    },
+    "25 - قسنطينة": {
+        "بريد قسنطينة المركزي": {"status": "🟢 كاين دراهم + فارغ", "time": "منذ قليل", "user": "النظام"},
+        "دائرة الخروب (علي منجلي)": {"status": "🟡 كاين دراهم + طابور متوسط", "time": "منذ قليل", "user": "النظام"}
+    },
+    "19 - سطيف": {
+        "بريد سطيف المركزي": {"status": "🔴 طابور طويل جداً", "time": "منذ قليل", "user": "النظام"},
+        "دائرة العلمة": {"status": "🟢 كاين دراهم + فارغ", "time": "منذ قليل", "user": "النظام"}
+    }
+}
+
+for w in WILAYAS:
+    if w not in reports:
+        w_name = w.split(" - ")[1]
+        reports[w] = {
+            f"البريد المركزي ({w_name})": {"status": "⚪ لا يوجد تحديث بعد (كن أول من يبلغ)", "time": "—", "user": "—"}
+        }
+
+user_state = {}
 
 def tg_request(method, data=None):
     url = API_URL + "/" + method
@@ -44,18 +83,55 @@ def send_msg(cid, text, buttons=None):
         payload["reply_markup"] = {"inline_keyboard": buttons}
     tg_request("sendMessage", payload)
 
-def main_buttons():
-    return [
-        [{"text": "🎁 الجائزة الأسبوعية (+20 نقطة)", "callback_data": "weekly"}],
-        [{"text": "👥 رابط الدعوة (+10 نقاط)", "callback_data": "invite"}, {"text": "💰 نقاطي", "callback_data": "points"}],
-        [{"text": "🏆 سحب جائزة 2 جيغا (100 نقطة)", "callback_data": "redeem"}]
-    ]
+def edit_msg(cid, mid, text, buttons=None):
+    payload = {"chat_id": cid, "message_id": mid, "text": text, "parse_mode": "Markdown"}
+    if buttons:
+        payload["reply_markup"] = {"inline_keyboard": buttons}
+    tg_request("editMessageText", payload)
+
+def wilayas_keyboard(page=0):
+    per_page = 12
+    start = page * per_page
+    end = start + per_page
+    slice_w = WILAYAS[start:end]
+
+    buttons = []
+    row = []
+    for idx, w in enumerate(slice_w, start=start):
+        row.append({"text": w, "callback_data": f"w_{idx}"})
+        if len(row) == 2:
+            buttons.append(row)
+            row = []
+    if row:
+        buttons.append(row)
+
+    nav = []
+    if page > 0:
+        nav.append({"text": "➡️ السابق", "callback_data": f"page_{page-1}"})
+    if end < len(WILAYAS):
+        nav.append({"text": "التالي ⬅️", "callback_data": f"page_{page+1}"})
+    if nav:
+        buttons.append(nav)
+
+    return buttons
+
+def communes_keyboard(w_idx):
+    w_name = WILAYAS[w_idx]
+    communes = list(reports[w_name].keys())
+    buttons = []
+    for c_idx, c_name in enumerate(communes):
+        status_icon = reports[w_name][c_name]["status"].split()[0]
+        buttons.append([{"text": f"{status_icon} {c_name}", "callback_data": f"c_{w_idx}_{c_idx}"}])
+
+    buttons.append([{"text": "➕ إضافة دائرة / بلدية / مركز بريد جديد", "callback_data": f"addc_{w_idx}"}])
+    buttons.append([{"text": "🔙 رجوع لقائمة الولايات (58 ولاية)", "callback_data": "page_0"}])
+    return buttons
 
 @app.route('/')
 def home():
     my_site = PROTO + "bot-dz-qob9" + "." + "onrender" + "." + "com" + "/webhook"
     res = tg_request("setWebhook?url=" + my_site)
-    return "Bot Status: " + str(res)
+    return "Radar Poste DZ (58 Wilayas & Communes) Status: " + str(res)
 
 @app.route('/webhook', methods=['POST'])
 def webhook():
@@ -66,64 +142,119 @@ def webhook():
     if "message" in data and "text" in data["message"]:
         cid = data["message"]["chat"]["id"]
         txt = data["message"]["text"].strip()
-        name = data["message"]["from"].get("first_name", "صديقي")
+        name = data["message"]["from"].get("first_name", "مواطن")
 
-        if waiting_phone.get(cid):
-            if len(txt) == 10 and txt.isdigit() and txt.startswith(("05", "06", "07")):
-                users[cid]["points"] -= 100
-                waiting_phone[cid] = False
-                send_msg(cid, f"✅ **تم استلام رقمك ({txt}) بنجاح!**\nسيتم إرسال جائزة **2 جيغا إنترنت** إليك قريباً.")
-                send_msg(ADMIN_ID, f"🚨 **فائز جديد بجائزة 2 جيغا!**\n👤 الاسم: {name}\n📱 الرقم: `{txt}`")
-            else:
-                send_msg(cid, "❌ رقم غير صحيح! أرسل رقماً جزائرياً من 10 أرقام (05 / 06 / 07):")
+        state = user_state.get(cid, {})
+        if state.get("action") == "adding_commune" and txt != "/start":
+            w_idx = state["w_idx"]
+            w_name = WILAYAS[w_idx]
+            new_commune = txt[:40]
+            if new_commune not in reports[w_name]:
+                reports[w_name][new_commune] = {
+                    "status": "⚪ تمت الإضافة حديثاً (اختر الحالة بالأسفل)",
+                    "time": time.strftime("%H:%M"),
+                    "user": name
+                }
+            user_state[cid] = {}
+            send_msg(
+                cid,
+                f"✅ **تمت إضافة ({new_commune}) بنجاح إلى ولاية {w_name}!**\n\n👇 اخترها الآن من القائمة لتحديث حالة السيولة والطابور فيها:",
+                communes_keyboard(w_idx)
+            )
             return "OK", 200
 
-        is_new = cid not in users
-        get_user(cid)
-        parts = txt.split()
-        if is_new and len(parts) > 1 and parts[1].isdigit():
-            inviter = int(parts[1])
-            if inviter != cid and inviter in users:
-                users[inviter]["points"] += 10
-                users[inviter]["invites"] += 1
-                send_msg(inviter, "🎉 **مبروك!** دخل صديق عبر رابطك وحصلت على **+10 نقاط**!")
-
-        welcome = f"👋 **أهلاً بك يا {name} في بوت Noti Pro!**\n\nاجمع النقاط مجاناً واستبدلها بـ **2 جيغا إنترنت أو رصيد فليكسي**:"
-        send_msg(cid, welcome, main_buttons())
+        user_state[cid] = {}
+        welcome = (
+            f"🇩🇿 **أهلاً بك يا {name} في رادار البريد DZ الشامل!**\n\n"
+            "📍 يغطي جميع **الولايات (58)، الدوائر، البلديات ومراكز البريد** في الجزائر لحظة بلحظة.\n\n"
+            "👇 **اختر ولايتك من القائمة بالأسفل:**"
+        )
+        send_msg(cid, welcome, wilayas_keyboard(0))
 
     elif "callback_query" in data:
         call = data["callback_query"]
         cid = call["message"]["chat"]["id"]
+        mid = call["message"]["message_id"]
         cdata = call["data"]
-        user = get_user(cid)
+        name = call["from"].get("first_name", "مواطن")
         tg_request("answerCallbackQuery", {"callback_query_id": call["id"]})
 
-        if cdata == "weekly":
-            now = time.time()
-            if now - user["last_weekly"] >= 604800:
-                user["points"] += 20
-                user["last_weekly"] = now
-                send_msg(cid, "🎉 **مبروك!** حصلت على **جائزتك الأسبوعية (+20 نقطة)**!", main_buttons())
-            else:
-                days = int((604800 - (now - user["last_weekly"])) / 86400) + 1
-                send_msg(cid, f"⏳ لقد أخذت جائزتك هذا الأسبوع.\nعُد بعد **{days} أيام**.", main_buttons())
+        if cdata.startswith("page_"):
+            page = int(cdata.split("_")[1])
+            edit_msg(cid, mid, f"🇩🇿 **اختر ولايتك (صفحة {page+1} من 5):**", wilayas_keyboard(page))
 
-        elif cdata == "invite":
-            link = PROTO + "t.me/noti_dz_2027_bot?start=" + str(cid)
-            send_msg(cid, f"👥 **شارك رابطك واربح 10 نقاط عن كل صديق:**\n\n`{link}`", main_buttons())
+        elif cdata.startswith("w_"):
+            w_idx = int(cdata.split("_")[1])
+            w_name = WILAYAS[w_idx]
+            text = (
+                f"📍 **ولاية: {w_name}**\n\n"
+                "👇 اختر **الدائرة / البلدية / مركز البريد** لمعرفة حالة السيولة والطابور، أو أضف بلديتك إذا لم تكن موجودة:"
+            )
+            edit_msg(cid, mid, text, communes_keyboard(w_idx))
 
-        elif cdata == "points":
-            send_msg(cid, f"💰 **نقاطك الحالية:** {user['points']} نقطة\n👥 **عدد الدعوات:** {user['invites']}\n🎯 **المطلوب لـ 2 جيغا:** 100 نقطة", main_buttons())
+        elif cdata.startswith("addc_"):
+            w_idx = int(cdata.split("_")[1])
+            w_name = WILAYAS[w_idx]
+            user_state[cid] = {"action": "adding_commune", "w_idx": w_idx}
+            send_msg(cid, f"✍️ **اكتب الآن اسم الدائرة أو البلدية أو مركز البريد** في ولاية **{w_name}** (مثال: *دائرة بئر العاتر* أو *بريد حي النصر*):")
 
-        elif cdata == "redeem":
-            if user["points"] >= 100:
-                waiting_phone[cid] = True
-                send_msg(cid, "📱 **مبروك وصولك لـ 100 نقطة!**\nأرسل الآن **رقم هاتفك** (10 أرقام) لشحن 2 جيغا إنترنت:")
-            else:
-                send_msg(cid, f"❌ نقاطك الحالية **{user['points']}** فقط. اجمع **100 نقطة** لطلب الجائزة!", main_buttons())
+        elif cdata.startswith("c_"):
+            parts = cdata.split("_")
+            w_idx = int(parts[1])
+            c_idx = int(parts[2])
+            w_name = WILAYAS[w_idx]
+            c_name = list(reports[w_name].keys())[c_idx]
+            info = reports[w_name][c_name]
 
-    return "OK", 200
+            text = (
+                f"🏛️ **الولاية:** {w_name}\n"
+                f"📍 **الدائرة / البلدية:** {c_name}\n\n"
+                f"📊 **الحالة الآن:** {info['status']}\n"
+                f"🕒 **وقت التحديث:** {info['time']}\n"
+                f"👤 **بواسطة:** {info['user']}\n\n"
+                "👇 **هل أنت متواجد هناك الآن؟ حدّث الحالة بضغطة زر:**"
+            )
+            btns = [
+                [{"text": "🟢 كاين دراهم + فارغ (لا يوجد طابور)", "callback_data": f"set_{w_idx}_{c_idx}_green"}],
+                [{"text": "🟡 كاين دراهم + طابور متوسط", "callback_data": f"set_{w_idx}_{c_idx}_yellow"}],
+                [{"text": "🔴 طابور طويل جداً (غاشي بزاف)", "callback_data": f"set_{w_idx}_{c_idx}_red"}],
+                [{"text": "❌ لا توجد سيولة (خلاصو الدراهم)", "callback_data": f"set_{w_idx}_{c_idx}_empty"}],
+                [{"text": "🔙 رجوع لدوائر وبلديات الولاية", "callback_data": f"w_{w_idx}"}]
+            ]
+            edit_msg(cid, mid, text, btns)
 
-if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 10000))
-    app.run(host="0.0.0.0", port=port)
+        elif cdata.startswith("set_"):
+            parts = cdata.split("_")
+            w_idx = int(parts[1])
+            c_idx = int(parts[2])
+            status_code = parts[3]
+
+            w_name = WILAYAS[w_idx]
+            c_name = list(reports[w_name].keys())[c_idx]
+
+            status_map = {
+                "green": "🟢 كاين دراهم + فارغ (لا يوجد طابور)",
+                "yellow": "🟡 كاين دراهم + طابور متوسط",
+                "red": "🔴 طابور طويل جداً (غاشي بزاف)",
+                "empty": "❌ لا توجد سيولة (خلاصو الدراهم)"
+            }
+            current_time = time.strftime("%H:%M")
+            reports[w_name][c_name] = {
+status": status_map[status_code],
+"time": f"اليوم على الساعة {current_time}",
+"user": name
+}
+text = (
+f"✅ يعطيك الصحة يا {name}!\n"
+f"تم تحديث حالة {c_name} ({w_name}) بنجاح ليراها جميع المواطنين:\n\n"
+f"📊 {status_map[status_code]}"
+)
+btns = [
+[{"text": "🔙 رجوع لدوائر وبلديات الولاية", "callback_data": f"w_{w_idx}"}],
+[{"text": "🏠 القائمة الرئيسية (58 ولاية)", "callback_data": "page_0"}]
+]
+edit_msg(cid, mid, text, btns)
+return "OK", 200
+if name == "main":
+port = int(os.environ.get("PORT", 10000))
+app.run(host="0.0.0.0", port=port)
