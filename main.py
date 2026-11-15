@@ -6,9 +6,10 @@ from flask import Flask, request
 
 app = Flask(__name__)
 
-TOKEN = "9232668538:AAEwX6AWbxuDu5MxGtFpf5tXZMVbAp3NcSo"
+BOT_ID = "9232668538"
+BOT_KEY = "AAEwX6AWbxuDu5MxGtFpf5tXZMVbAp3NcSo"
 ADMIN_ID = 123456789
-API_URL = "https://telegram.org" + TOKEN
+API_URL = "https://telegram.org" + BOT_ID + ":" + BOT_KEY
 
 users = {}
 waiting_phone = {}
@@ -19,7 +20,7 @@ def get_user(cid):
     return users[cid]
 
 def tg_request(method, data=None):
-    url = f"{API_URL}/{method}"
+    url = API_URL + "/" + method
     if data:
         req = urllib.request.Request(
             url,
@@ -50,7 +51,7 @@ def main_buttons():
 @app.route('/')
 def home():
     res = tg_request("setWebhook?url=https://onrender.com")
-    return f"Bot Status: {res}"
+    return "Bot Status: " + str(res)
 
 @app.route('/webhook', methods=['POST'])
 def webhook():
