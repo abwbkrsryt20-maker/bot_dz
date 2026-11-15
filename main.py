@@ -8,7 +8,7 @@ app = Flask(__name__)
 
 TOKEN = "9232668538:AAEwX6AWbxuDu5MxGtFpf5tXZMVbAp3NcSo"
 ADMIN_ID = 123456789
-API_URL = f"https://telegram.org{TOKEN}"
+API_URL = "https://telegram.org" + TOKEN
 
 users = {}
 waiting_phone = {}
