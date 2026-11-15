@@ -5,9 +5,8 @@ from flask import Flask, request
 
 app = Flask(__name__)
 
-# التوكن الخاص ببوتك (يُفضل تغييره لاحقاً من BotFather عبر /revoke)
 TOKEN = "9232668538:AAEwX6AWbxuDu5MxGtFpf5tXZMVbAp3NcSo"
-ADMIN_ID = 123456789  # ضع رقم ID حسابك هنا ليصلك رقم الفائز بالجائزة
+ADMIN_ID = 123456789
 API_URL = f"https://telegram.org{TOKEN}"
 
 users = {}
@@ -33,7 +32,9 @@ def main_buttons():
 
 @app.route('/')
 def home():
-    return "Bot Noti Pro is Running!"
+    # تفعيل الويب هوك بمجرد فتح رابط السيرفر
+    r = requests.get(f"{API_URL}/setWebhook?url=https://onrender.com")
+    return f"Bot Status: {r.text}"
 
 @app.route('/webhook', methods=['POST'])
 def webhook():
@@ -41,13 +42,11 @@ def webhook():
     if not data:
         return "OK", 200
 
-    # 1. معالجة الرسائل النصية
     if "message" in data and "text" in data["message"]:
         cid = data["message"]["chat"]["id"]
         txt = data["message"]["text"].strip()
         name = data["message"]["from"].get("first_name", "صديقي")
 
-        # إذا كان المستخدم يرسل رقم هاتفه لاستلام جائزة 2 جيغا
         if waiting_phone.get(cid):
             if len(txt) == 10 and txt.isdigit() and txt.startswith(("05", "06", "07")):
                 users[cid]["points"] -= 100
@@ -58,12 +57,11 @@ def webhook():
                 send_msg(cid, "❌ رقم غير صحيح! أرسل رقماً جزائرياً من 10 أرقام (05 / 06 / 07):")
             return "OK", 200
 
-        # التحقق من رابط الإحالة عند /start
         is_new = cid not in users
         get_user(cid)
         parts = txt.split()
-        if is_new and len(parts) > 1 and parts.isdigit():
-            inviter = int(parts)
+        if is_new and len(parts) > 1 and parts[1].isdigit():
+            inviter = int(parts[1])
             if inviter != cid and inviter in users:
                 users[inviter]["points"] += 10
                 users[inviter]["invites"] += 1
@@ -72,7 +70,6 @@ def webhook():
         welcome = f"👋 **أهلاً بك يا {name} في بوت Noti Pro!**\n\nاجمع النقاط مجاناً واستبدلها بـ **2 جيغا إنترنت أو رصيد فليكسي**:"
         send_msg(cid, welcome, main_buttons())
 
-    # 2. معالجة ضغطات الأزرار
     elif "callback_query" in data:
         call = data["callback_query"]
         cid = call["message"]["chat"]["id"]
@@ -109,4 +106,3 @@ def webhook():
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 10000))
     app.run(host="0.0.0.0", port=port)
-requests.get(f"{API_URL}/setWebhook?url=https://onrender.com")
